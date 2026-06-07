@@ -121,5 +121,8 @@ def clear_board():
     state["board"] = generate_board(state["grid_size"])
     return jsonify({"success": True})
 
+# هذا السطر مهم جداً لمنصة Vercel لكي تتعرف على التطبيق وتدرير اللعبة
+app = app
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
