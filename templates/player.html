@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>شاشة اللوحة السداسية - حروف وألوف</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0c1b; color: white; text-align: center; margin: 0; padding: 20px; }
+        .header { display: flex; justify-content: space-around; background: #16122c; padding: 15px; border-radius: 15px; margin-bottom: 25px; font-size: 26px; font-weight: bold; }
+        .team-red { color: #ff4757; text-shadow: 0 0 10px rgba(255,71,87,0.5); }
+        .team-green { color: #2ed573; text-shadow: 0 0 10px rgba(46,213,115,0.5); }
+        
+        /* صبغ أرضية الملعب بالكامل بألوان صريحة وقوية (أحمر أعلى وأسفل، وأخضر يمين ويسار) */
+        .board-wrapper {
+            display: inline-block;
+            position: relative;
+            padding: 40px 75px 40px 45px; /* معالجة الإزاحة تماماً */
+            border-radius: 30px;
+            /* تقسيم الخلفية هندسياً بألوان الفرق الفاقعة والصريحة */
+            background: conic-gradient(
+                from 45deg,
+                #ff4757 0deg 90deg,    /* أعلى: أحمر */
+                #2ed573 90deg 180deg,  /* يسار: أخضر */
+                #ff4757 180deg 270deg, /* أسفل: أحمر */
+                #2ed573 270deg 360deg  /* يمين: أخضر */
+            );
+            /* إطار خارجي نيون ثلاثي الأبعاد لفصل اللوحة */
+            border: 5px solid #16122c;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+        }
+
+        /* قناع حماية داخلي داكن يعطي فخامة للخلفية الملونة تحت الحروف مباشرة دون أن يخفيها */
+        .board-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            background: rgba(17, 14, 36, 0.45); /* تعتيم خفيف لبروز الحروف */
+            border-radius: 20px;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .hex-grid { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .hex-row { display: flex; justify-content: center; margin-bottom: -15px; }
+        .hex-row:nth-child(even) { transform: translateX(31px); }
+        
+        /* الحروف بلونها الأصفر الذهبي النقي والواضح */
+        .hex { width: 56px; height: 65px; background: #eccc68; color: #1e1e24; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); margin: 0 3px; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        
+        /* عند الإغلاق تصبح الخلية مضيئة بلون الفريق المصمت تماماً */
+        .hex.red { background: #ff4757 !important; color: #ff4757 !important; font-size: 0px !important; box-shadow: 0 0 20px #ff4757 !important; }
+        .hex.green { background: #2ed573 !important; color: #2ed573 !important; font-size: 0px !important; box-shadow: 0 0 20px #2ed573 !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="team-red">🔴 مسار الأعلى والأسفل: <span id="t1-name">{{ state.team1_name }}</span></div>
+        <div class="team-green">🟢 مسار اليمين واليسار: <span id="t2-name">{{ state.team2_name }}</span></div>
+    </div>
+    
+    <div class="board-wrapper">
+        <div class="hex-grid" id="board-grid">
+            {% for r in range(state.grid_size) %}
+                <div class="hex-row">
+                {% for c in range(state.grid_size) %}
+                    {% set cell_id = "" ~ r ~ "," ~ c %}
+                    <div class="hex {{ state.board[cell_id].color }}" id="cell-{{ r }}-{{ c }}">
+                        {{ state.board[cell_id].letter }}
+                    </div>
+                {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        setInterval(() => {
+            fetch('/api/get_state')
+            .then(res => res.json())
+            .then(state => {
+                document.getElementById('t1-name').innerText = state.team1_name;
+                document.getElementById('t2-name').innerText = state.team2_name;
+                
+                for (let key in state.board) {
+                    let coords = key.split(',');
+                    let el = document.getElementById(`cell-${coords[0]}-${coords[1]}`);
+                    if (el) { 
+                        el.className = `hex ${state.board[key].color}`;
+                    }
+                }
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

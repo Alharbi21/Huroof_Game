@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة التحكم وبنك الأسئلة الذاتي</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1e1e24; color: #fff; padding: 20px; margin: 0; }
+        .layout { display: flex; gap: 20px; max-width: 1400px; margin: 0 auto; }
+        .sidebar { background: #2a2a35; padding: 20px; border-radius: 12px; width: 320px; }
+        .main-content { flex-grow: 1; background: #2a2a35; padding: 20px; border-radius: 12px; }
+        
+        /* مطابقة الأرضية الملونة الصريحة تماماً مع شاشة العرض */
+        .board-wrapper { 
+            display: inline-block;
+            position: relative;
+            padding: 40px 75px 40px 45px;
+            border-radius: 25px;
+            background: conic-gradient(
+                from 45deg,
+                #ff4757 0deg 90deg,
+                #2ed573 90deg 180deg,
+                #ff4757 180deg 270deg,
+                #2ed573 270deg 360deg
+            );
+            margin-top: 15px;
+            border: 5px solid #1e1e24;
+            box-shadow: 0 0 25px rgba(0,0,0,0.5);
+        }
+
+        .board-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            background: rgba(17, 14, 36, 0.45);
+            border-radius: 15px;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .hex-grid { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+        .hex-row { display: flex; justify-content: center; margin-bottom: -15px; }
+        .hex-row:nth-child(even) { transform: translateX(31px); }
+        
+        .admin-hex { width: 56px; height: 65px; background: #eccc68; color: #1e1e24; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); margin: 0 3px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        
+        .admin-hex.red { background: #ff4757 !important; color: #ff4757 !important; font-size: 0px !important; box-shadow: 0 0 15px #ff4757 !important; }
+        .admin-hex.green { background: #2ed573 !important; color: #2ed573 !important; font-size: 0px !important; box-shadow: 0 0 15px #2ed573 !important; }
+        
+        .qa-card { background: #111116; padding: 20px; border-radius: 8px; border-right: 6px solid #eccc68; margin-bottom: 20px; }
+        button { padding: 12px; margin-top: 10px; width: 100%; background: #2ed573; color: white; border: none; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; background: #3e3e50; border: 1px solid #565670; color: white; border-radius: 6px; box-sizing: border-box; }
+        label { display: block; margin-top: 12px; color: #ccc; }
+
+        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2a2a35; padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 2px solid #2ed573; z-index: 100; width: 420px; }
+        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:99; }
+    </style>
+</head>
+<body>
+    <h2 style="text-align: center; margin-bottom: 30px;">🎙️ لوحة التحكم - تعديل الأطراف والمساحات الصريحة</h2>
+    <div class="layout">
+        <div class="sidebar">
+            <h3>⚙️ جولات جديدة وخلط الحروف</h3>
+            <label>فريق الأعلى والأسفل (الأحمر):</label> <input type="text" id="t1" value="{{ state.team1_name }}">
+            <label>فريق اليمين واليسار (الأخضر):</label> <input type="text" id="t2" value="{{ state.team2_name }}">
+            <label>حجم اللوحة السداسية:</label>
+            <select id="g_size">
+                <option value="5" {% if state.grid_size == 5 %}selected{% endif %}>5 × 5</option>
+                <option value="6" {% if state.grid_size == 6 %}selected{% endif %}>6 × 6</option>
+            </select>
+            <button onclick="saveSettings()">🎲 جولة جديدة (بعثرة الحروف والأسئلة)</button>
+            <button style="background: #2ed573; border: 2px solid #fff;" onclick="openModal()">➕ إضافة سؤال لبنك الأسئلة</button>
+            <button style="background: #ff4757;" onclick="clearBoard()">🔄 تفريغ اللوحة وإعادة الخلط</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="qa-card">
+                <h3>📋 الحرف النشط وسؤاله المبعثر</h3>
+                <p><strong>الحرف المختبر:</strong> <span id="current-l" style="font-size: 24px; color: gold;">اختر حرفاً بالأسفل</span></p>
+                <p><strong>السؤال العشوائي:</strong> <span id="current-q" style="color:#7bed9f; font-size:18px;">-</span></p>
+                <p><strong>الإجابة الصحيحة:</strong> <span id="current-a" style="font-weight:bold;">-</span></p>
+                <div id="action-buttons" class="btn-group" style="display:none;">
+                    <button style="background:#ff4757;" onclick="colorCell('red')">إجابة صحيحة (أحمر)</button>
+                    <button style="background:#2ed573;" onclick="colorCell('green')">إجابة صحيحة (أخضر)</button>
+                    <button style="background:#888;" onclick="colorCell('none')">إلغاء التلوين وإعادة الحرف</button>
+                </div>
+            </div>
+            
+            <div class="board-wrapper">
+                <div class="hex-grid">
+                    {% for r in range(state.grid_size) %}
+                        <div class="hex-row">
+                        {% for c in range(state.grid_size) %}
+                            {% set cell_id = "" ~ r ~ "," ~ c %}
+                            <div class="admin-hex {{ state.board[cell_id].color }}" id="admin-cell-{{ r }}-{{ c }}" 
+                                 onclick="selectCell('{{ cell_id }}')">
+                                {{ state.board[cell_id].letter }}
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="overlay" onclick="closeModal()"></div>
+    <div class="modal" id="qModal">
+        <h3 style="margin-top:0; color:#2ed573;">➕ إضافة سؤال جديد للبنك</h3>
+        <label>اختر الحرف المستهدف:</label>
+        <select id="ins-letter">
+            {% for L in ["أ", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "هـ", "و", "ي"] %}
+            <option value="{{ L }}">{{ L }}</option>
+            {% endfor %}
+        </select>
+        <label>نص السؤال الجديد:</label>
+        <textarea id="ins-question" rows="3" placeholder="اكتب السؤال هنا..."></textarea>
+        <label>الإجابة النموذجية:</label>
+        <input type="text" id="ins-answer" placeholder="اكتب الإجابة النموذجية هنا...">
+        <button onclick="submitToBank()">💾 حفظ في بنك الأسئلة</button>
+        <button style="background:#57606f; margin-top:5px;" onclick="closeModal()">إلغاء</button>
+    </div>
+
+    <script>
+        let selectedCellId = null;
+        let globalBoard = {};
+
+        function refreshData() {
+            fetch('/api/get_state').then(res => res.json()).then(state => { 
+                globalBoard = state.board; 
+                if(selectedCellId) {
+                    document.getElementById('current-q').innerText = globalBoard[selectedCellId].question;
+                    document.getElementById('current-a').innerText = globalBoard[selectedCellId].answer;
+                }
+            });
+        }
+        refreshData();
+
+        function selectCell(id) {
+            selectedCellId = id;
+            document.getElementById('current-l').innerText = globalBoard[id].letter;
+            document.getElementById('current-q').innerText = globalBoard[id].question;
+            document.getElementById('current-a').innerText = globalBoard[id].answer;
+            document.getElementById('action-buttons').style.display = 'flex';
+        }
+
+        function colorCell(color) {
+            if(!selectedCellId) return;
+            fetch('/api/click_cell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cell_id: selectedCellId, color: color })
+            }).then(() => { location.reload(); });
+        }
+
+        function openModal() {
+            document.getElementById('qModal').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+        function closeModal() {
+            document.getElementById('qModal').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('ins-question').value = '';
+            document.getElementById('ins-answer').value = '';
+        }
+
+        function submitToBank() {
+            const letter = document.getElementById('ins-letter').value;
+            const q = document.getElementById('ins-question').value;
+            const a = document.getElementById('ins-answer').value;
+            
+            if(!q || !a) { alert("رجاءً اكتب السؤال والجواب أولاً!"); return; }
+
+            fetch('/api/add_to_bank', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ letter: letter, question: q, answer: a })
+            }).then(() => {
+                alert(`تم التخزين وبعثرة اللوحة بنجاح!`);
+                closeModal();
+                window.location.reload();
+            });
+        }
+
+        function saveSettings() {
+            fetch('/api/update_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    team1_name: document.getElementById('t1').value,
+                    team2_name: document.getElementById('t2').value,
+                    grid_size: document.getElementById('g_size').value
+                })
+            }).then(() => { location.reload(); });
+        }
+
+        function clearBoard() {
+            if(confirm("بدء جولة جديدة وخلط الحروف?")) {
+                fetch('/api/clear', { method: 'POST' }).then(() => { location.reload(); });
+            }
+        }
+    </script>
+</body>
+</html>
